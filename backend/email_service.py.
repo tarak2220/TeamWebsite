@@ -1,0 +1,75 @@
+
+import logging
+import os
+import smtplib
+from email.message import EmailMessage
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+
+def send_inquiry_email(
+    name: str,
+    client_email: str,
+    service: str,
+    project_details: str,
+    inquiry_id: int | str | None = None,
+) -> bool:
+    """Email the website owner about a new client inquiry."""
+
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_email = os.getenv("SMTP_EMAIL", "")
+    smtp_password = os.getenv("SMTP_APP_PASSWORD", "")
+    recipient = os.getenv(
+        "INQUIRY_RECIPIENT",
+        "tarakvamsharaj@gmail.com",
+    )
+
+    if not smtp_email or not smtp_password:
+        logger.error("Email not sent: SMTP credentials are missing.")
+        return False
+
+    message = EmailMessage()
+    message["Subject"] = f"New TeamWebsite inquiry: {service}"
+    message["From"] = smtp_email
+    message["To"] = recipient
+
+    # Reply directly to the client from your email application.
+    if client_email:
+        message["Reply-To"] = client_email
+
+    message.set_content(
+        f"""A new client inquiry was submitted through TeamWebsite.
+
+Inquiry ID: {inquiry_id if inquiry_id is not None else "Not available"}
+
+Client name: {name}
+Client email: {client_email}
+Requested service: {service}
+
+Project requirements:
+{project_details}
+
+Please reply to the client if you would like to discuss this project.
+"""
+    )
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(smtp_email, smtp_password)
+            server.send_message(message)
+
+        logger.info("Inquiry notification email sent for inquiry %s", inquiry_id)
+        return True
+
+    except (OSError, smtplib.SMTPException) as exc:
+        # Do not log the password or other SMTP credentials.
+        logger.exception("Failed to send inquiry notification: %s", exc)
+        return False
