@@ -34,20 +34,14 @@ app = FastAPI(
 
 
 # ==========================================
-# DATABASE INITIALIZATION
-# ==========================================
-
-Base.metadata.create_all(bind=engine)
-
-
-# ==========================================
 # CORS CONFIGURATION
-# Local development only
+# GitHub Pages + Local Development
 # ==========================================
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://tarak2220.github.io",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ],
@@ -58,7 +52,15 @@ app.add_middleware(
 
 
 # ==========================================
+# DATABASE INITIALIZATION
+# ==========================================
+
+Base.metadata.create_all(bind=engine)
+
+
+# ==========================================
 # ROOT ENDPOINT
+# GET /
 # ==========================================
 
 @app.get("/")
@@ -71,6 +73,7 @@ def root():
 
 # ==========================================
 # HEALTH CHECK
+# GET /api/health
 # ==========================================
 
 @app.get("/api/health")
@@ -97,13 +100,12 @@ def create_inquiry(
     """
     Save a client inquiry to the database.
 
-    After saving, attempt to send an email notification.
-    Client inquiry records are not exposed through a
-    public listing endpoint.
+    Attempt to send an email notification after
+    the inquiry has been saved.
     """
 
     # --------------------------------------
-    # Validate and save inquiry
+    # SAVE INQUIRY TO DATABASE
     # --------------------------------------
 
     try:
@@ -121,52 +123,40 @@ def create_inquiry(
     except Exception:
         db.rollback()
 
-        logger.exception(
-            "Failed to save client inquiry."
-        )
+        logger.exception("Failed to save client inquiry.")
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Could not save your inquiry. "
-                "Please try again."
-            ),
+            detail="Failed to save your inquiry. Please try again.",
         )
 
     # --------------------------------------
-    # Send email notification
+    # SEND EMAIL NOTIFICATION
     # --------------------------------------
 
     try:
-        email_sent = send_inquiry_email(
+        email_result = send_inquiry_email(
             name=db_inquiry.name,
-            client_email=db_inquiry.email,
+            email=db_inquiry.email,
             service=db_inquiry.service,
             project_details=db_inquiry.project_details,
-            inquiry_id=db_inquiry.id,
         )
 
-        if email_sent:
-            logger.info(
-                "Email notification sent for inquiry #%s.",
-                db_inquiry.id,
-            )
-        else:
-            logger.warning(
-                "Inquiry #%s was saved, but its email "
-                "notification could not be sent.",
-                db_inquiry.id,
-            )
+        logger.info(
+            "Email notification result: %s",
+            email_result,
+        )
 
     except Exception:
-        # Do not lose a saved inquiry because email failed.
+        # The inquiry is already saved.
+        # Do not report the database operation as failed
+        # just because the email notification failed.
         logger.exception(
-            "Unexpected email error for inquiry #%s.",
-            db_inquiry.id,
+            "Inquiry saved, but email notification failed."
         )
 
     # --------------------------------------
-    # Return confirmation for the submitted inquiry
+    # RETURN SAVED INQUIRY
     # --------------------------------------
 
     return db_inquiry
