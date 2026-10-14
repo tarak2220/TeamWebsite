@@ -1,7 +1,9 @@
 
 import { useState, type FormEvent } from "react";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"
+).replace(/\/+$/, "");
 
 const services = [
   {
@@ -133,7 +135,7 @@ const projects = [
     github: "",
     demo: "",
   },
-
+  
   {
     number: "07",
     title: "Line-Follower Robot",
@@ -168,7 +170,12 @@ const projects = [
     category: "AUTONOMOUS ROBOTICS",
     description:
       "A compact, car-like square mobile robot designed for autonomous navigation using a LiDAR sensor. The robot senses its surroundings, detects obstacles, and supports autonomous movement in its environment.",
-    tags: ["LiDAR", "Mobile Robotics", "Autonomous Navigation", "Obstacle Detection"],
+    tags: [
+      "LiDAR",
+      "Mobile Robotics",
+      "Autonomous Navigation",
+      "Obstacle Detection",
+    ],
     icon: "🤖",
     color: "from-blue-500/20 to-violet-500/5",
     status: "In Progress",
@@ -193,25 +200,25 @@ const team: TeamMember[] = [
     name: "K. VenuGopal",
     role: "AI & Backend Developer",
     skills: ["Python", "FastAPI", "AI/ML", "SQL"],
-    initials: "YN",
+    initials: "KV",
     bio: "Building intelligent applications, APIs, and software solutions.",
     github: "",
     linkedin: "",
   },
   {
-    name: "P. Taraka Ramudu ",
+    name: "P. Taraka Ramudu",
     role: "Robotics Developer",
     skills: ["ROS 2", "Arduino", "Robotics"],
-    initials: "TM",
+    initials: "TR",
     bio: "Working on robotics, embedded systems, and hardware integration.",
     github: "",
     linkedin: "",
   },
   {
-    name: "A.Yeshwini",
+    name: "A. Yeshwini",
     role: "Frontend Developer",
     skills: ["React", "TypeScript", "CSS"],
-    initials: "TM",
+    initials: "AY",
     bio: "Creating responsive, accessible, and engaging user interfaces.",
     github: "",
     linkedin: "",
@@ -220,7 +227,7 @@ const team: TeamMember[] = [
     name: "P. Vandana",
     role: "IoT & Embedded Developer",
     skills: ["IoT", "Raspberry Pi", "C++"],
-    initials: "TM",
+    initials: "PV",
     bio: "Connecting physical devices with practical software solutions.",
     github: "",
     linkedin: "",
@@ -266,18 +273,23 @@ function SectionHeading({
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
+
   const [form, setForm] = useState({
     name: "",
     email: "",
     service: "",
     project: "",
   });
+
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error" | "">("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (submitting) return;
+
     setSubmitting(true);
     setMessage("");
     setMessageType("");
@@ -285,31 +297,69 @@ function App() {
     try {
       const response = await fetch(`${API_URL}/api/inquiries`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          service: form.service,
+          project_details: form.project.trim(),
+        }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const detail = Array.isArray(data.detail)
-          ? data.detail.map((item: { msg: string }) => item.msg).join(", ")
-          : data.detail;
+        let errorMessage = "Unable to submit your inquiry.";
 
-        throw new Error(detail || "Unable to submit your inquiry.");
+        if (Array.isArray(data.detail)) {
+          errorMessage = data.detail
+            .map((item: { msg?: string; loc?: (string | number)[] }) => {
+              const field = item.loc?.at(-1);
+              return field
+                ? `${String(field)}: ${item.msg || "Invalid value"}`
+                : item.msg || "Invalid input";
+            })
+            .join(". ");
+        } else if (typeof data.detail === "string") {
+          errorMessage = data.detail;
+        } else if (typeof data.message === "string") {
+          errorMessage = data.message;
+        }
+
+        throw new Error(
+          `Request failed (${response.status}): ${errorMessage}`,
+        );
       }
 
       setMessage(
-        `Thank you, ${data.name}! Your inquiry has been saved successfully.`
+        `Thank you, ${data.name || form.name.trim()}! Your inquiry has been submitted successfully.`,
       );
       setMessageType("success");
-      setForm({ name: "", email: "", service: "", project: "" });
+
+      setForm({
+        name: "",
+        email: "",
+        service: "",
+        project: "",
+      });
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to connect to the backend. Please try again."
-      );
+      console.error("Inquiry submission error:", error);
+
+      if (error instanceof TypeError) {
+        setMessage(
+          `Could not connect to the backend at ${API_URL}. Make sure your FastAPI server is running and CORS is configured correctly.`,
+        );
+      } else {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred. Please try again.",
+        );
+      }
+
       setMessageType("error");
     } finally {
       setSubmitting(false);
@@ -327,7 +377,11 @@ function App() {
 
       <header className="sticky top-0 z-50 border-b border-white/[0.08] bg-[#080b14]/90 backdrop-blur-xl">
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-          <a href="#home" className="flex items-center gap-3" onClick={closeMenu}>
+          <a
+            href="#home"
+            className="flex items-center gap-3"
+            onClick={closeMenu}
+          >
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 to-violet-500 text-lg font-black text-slate-950">
               T
             </span>
@@ -337,11 +391,21 @@ function App() {
           </a>
 
           <div className="hidden items-center gap-7 text-sm text-slate-300 lg:flex">
-            <a className="transition hover:text-cyan-400" href="#home">Home</a>
-            <a className="transition hover:text-cyan-400" href="#services">Services</a>
-            <a className="transition hover:text-cyan-400" href="#projects">Projects</a>
-            <a className="transition hover:text-cyan-400" href="#team">Our Team</a>
-            <a className="transition hover:text-cyan-400" href="#about">About</a>
+            <a className="transition hover:text-cyan-400" href="#home">
+              Home
+            </a>
+            <a className="transition hover:text-cyan-400" href="#services">
+              Services
+            </a>
+            <a className="transition hover:text-cyan-400" href="#projects">
+              Projects
+            </a>
+            <a className="transition hover:text-cyan-400" href="#team">
+              Our Team
+            </a>
+            <a className="transition hover:text-cyan-400" href="#about">
+              About
+            </a>
           </div>
 
           <a
@@ -450,7 +514,7 @@ function App() {
               <div className="my-7 grid grid-cols-2 gap-4">
                 {[
                   ["🤖", "Robotics", "Intelligent machines"],
-                  ["🧠", "Artificial AI", "Smart applications"],
+                  ["🧠", "Artificial Intelligence", "Smart applications"],
                   ["⚡", "Embedded", "Hardware systems"],
                   ["🌐", "Software", "Digital products"],
                 ].map(([icon, title, subtitle]) => (
@@ -484,7 +548,10 @@ function App() {
         </section>
 
         {/* SERVICES */}
-        <section id="services" className="border-y border-white/[0.06] bg-white/[0.015] px-5 py-24 sm:px-8">
+        <section
+          id="services"
+          className="border-y border-white/[0.06] bg-white/[0.015] px-5 py-24 sm:px-8"
+        >
           <div className="mx-auto max-w-7xl">
             <SectionHeading
               eyebrow="What We Do"
@@ -500,11 +567,18 @@ function App() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-3xl">{service.icon}</span>
-                    <span className="text-xs tracking-widest text-slate-600">{service.number}</span>
+                    <span className="text-xs tracking-widest text-slate-600">
+                      {service.number}
+                    </span>
                   </div>
                   <h3 className="mt-7 text-xl font-bold">{service.title}</h3>
-                  <p className="mt-3 leading-7 text-slate-400">{service.description}</p>
-                  <a href="#contact" className="mt-6 inline-block text-sm font-semibold text-cyan-400 hover:text-cyan-300">
+                  <p className="mt-3 leading-7 text-slate-400">
+                    {service.description}
+                  </p>
+                  <a
+                    href="#contact"
+                    className="mt-6 inline-block text-sm font-semibold text-cyan-400 hover:text-cyan-300"
+                  >
                     Discuss your project ↗
                   </a>
                 </article>
@@ -528,7 +602,9 @@ function App() {
                   key={project.number}
                   className="group overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d111d] transition duration-300 hover:-translate-y-1 hover:border-cyan-400/30"
                 >
-                  <div className={`relative flex h-48 items-center justify-center overflow-hidden bg-gradient-to-br ${project.color}`}>
+                  <div
+                    className={`relative flex h-48 items-center justify-center overflow-hidden bg-gradient-to-br ${project.color}`}
+                  >
                     {project.image ? (
                       <img
                         src={project.image}
@@ -547,8 +623,12 @@ function App() {
 
                   <div className="p-6">
                     <div className="flex items-start justify-between gap-3">
-                      <h3 className="text-xl font-bold leading-7">{project.title}</h3>
-                      <span className="text-xs text-slate-600">{project.number}</span>
+                      <h3 className="text-xl font-bold leading-7">
+                        {project.title}
+                      </h3>
+                      <span className="text-xs text-slate-600">
+                        {project.number}
+                      </span>
                     </div>
                     <p className="mt-3 min-h-24 text-sm leading-7 text-slate-400">
                       {project.description}
@@ -566,15 +646,27 @@ function App() {
                     </div>
 
                     <div className="mt-6 flex items-center justify-between gap-3 border-t border-white/[0.08] pt-5">
-                      <span className="text-xs text-slate-500">{project.status}</span>
+                      <span className="text-xs text-slate-500">
+                        {project.status}
+                      </span>
                       <div className="flex gap-3 text-sm">
                         {project.github && (
-                          <a href={project.github} target="_blank" rel="noreferrer" className="text-cyan-400 hover:text-cyan-300">
+                          <a
+                            href={project.github}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-cyan-400 hover:text-cyan-300"
+                          >
                             GitHub ↗
                           </a>
                         )}
                         {project.demo && (
-                          <a href={project.demo} target="_blank" rel="noreferrer" className="text-cyan-400 hover:text-cyan-300">
+                          <a
+                            href={project.demo}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-cyan-400 hover:text-cyan-300"
+                          >
                             Live Demo ↗
                           </a>
                         )}
@@ -595,30 +687,40 @@ function App() {
         </section>
 
         {/* TEAM */}
-        <section id="team" className="border-y border-white/[0.06] bg-white/[0.015] px-5 py-24 sm:px-8">
+        <section
+          id="team"
+          className="border-y border-white/[0.06] bg-white/[0.015] px-5 py-24 sm:px-8"
+        >
           <div className="mx-auto max-w-7xl">
             <SectionHeading
               eyebrow="Meet The Team"
               title="People behind the technology."
-              description="A multidisciplinary team bringing software, AI, robotics, and embedded engineering together. Replace the sample names and profiles with your real team details."
+              description="A multidisciplinary team bringing software, AI, robotics, and embedded engineering together."
             />
 
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {team.map((member, index) => (
+              {team.map((member) => (
                 <article
-                  key={`${member.name}-${index}`}
+                  key={member.name}
                   className="group rounded-2xl border border-white/[0.08] bg-[#0d111d] p-6 text-center transition duration-300 hover:-translate-y-1 hover:border-violet-400/30"
                 >
                   <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border border-cyan-300/20 bg-gradient-to-br from-cyan-400/20 to-violet-500/20 text-2xl font-black text-cyan-200 transition group-hover:scale-105">
                     {member.initials}
                   </div>
                   <h3 className="mt-5 text-lg font-bold">{member.name}</h3>
-                  <p className="mt-2 text-sm font-medium text-cyan-400">{member.role}</p>
-                  <p className="mt-4 min-h-16 text-sm leading-6 text-slate-400">{member.bio}</p>
+                  <p className="mt-2 text-sm font-medium text-cyan-400">
+                    {member.role}
+                  </p>
+                  <p className="mt-4 min-h-16 text-sm leading-6 text-slate-400">
+                    {member.bio}
+                  </p>
 
                   <div className="mt-4 flex flex-wrap justify-center gap-2">
                     {member.skills.map((skill) => (
-                      <span key={skill} className="rounded-md bg-white/[0.05] px-2 py-1 text-[11px] text-slate-300">
+                      <span
+                        key={skill}
+                        className="rounded-md bg-white/[0.05] px-2 py-1 text-[11px] text-slate-300"
+                      >
                         {skill}
                       </span>
                     ))}
@@ -627,12 +729,22 @@ function App() {
                   {(member.github || member.linkedin) && (
                     <div className="mt-5 flex justify-center gap-4 text-sm">
                       {member.github && (
-                        <a href={member.github} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">
+                        <a
+                          href={member.github}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-cyan-400 hover:underline"
+                        >
                           GitHub ↗
                         </a>
                       )}
                       {member.linkedin && (
-                        <a href={member.linkedin} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">
+                        <a
+                          href={member.linkedin}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-cyan-400 hover:underline"
+                        >
                           LinkedIn ↗
                         </a>
                       )}
@@ -643,11 +755,17 @@ function App() {
             </div>
 
             <div className="mt-10 rounded-2xl border border-white/[0.08] bg-[#0d111d] p-7 text-center sm:p-10">
-              <h3 className="text-2xl font-bold">Want to collaborate with us?</h3>
+              <h3 className="text-2xl font-bold">
+                Want to collaborate with us?
+              </h3>
               <p className="mx-auto mt-3 max-w-xl leading-7 text-slate-400">
-                We welcome opportunities to work with businesses, startups, and people who want to turn good ideas into useful products.
+                We welcome opportunities to work with businesses, startups,
+                and people who want to turn good ideas into useful products.
               </p>
-              <a href="#contact" className="mt-6 inline-flex rounded-xl bg-white px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-200">
+              <a
+                href="#contact"
+                className="mt-6 inline-flex rounded-xl bg-white px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-200"
+              >
                 Meet Us Through a Project ↗
               </a>
             </div>
@@ -658,10 +776,14 @@ function App() {
         <section id="about" className="px-5 py-24 sm:px-8">
           <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-2">
             <div>
-              <p className="mb-4 text-xs font-bold uppercase tracking-[0.3em] text-cyan-400">About Our Studio</p>
+              <p className="mb-4 text-xs font-bold uppercase tracking-[0.3em] text-cyan-400">
+                About Our Studio
+              </p>
               <h2 className="text-3xl font-bold leading-tight sm:text-5xl">
                 Small team.
-                <span className="block text-slate-400">Big engineering ideas.</span>
+                <span className="block text-slate-400">
+                  Big engineering ideas.
+                </span>
               </h2>
               <p className="mt-6 leading-8 text-slate-400">
                 We are a technology development team focused on designing and
@@ -669,11 +791,14 @@ function App() {
                 the physical world through AI, robotics, electronics, and IoT.
               </p>
               <p className="mt-4 leading-8 text-slate-400">
-                Whether you're a startup validating an idea or a business looking
-                for custom software, we aim to understand your requirements and
-                build a solution that fits.
+                Whether you're a startup validating an idea or a business
+                looking for custom software, we aim to understand your
+                requirements and build a solution that fits.
               </p>
-              <a href="#contact" className="mt-8 inline-flex rounded-xl border border-cyan-400/30 px-5 py-3 font-semibold text-cyan-300 transition hover:bg-cyan-400/10">
+              <a
+                href="#contact"
+                className="mt-8 inline-flex rounded-xl border border-cyan-400/30 px-5 py-3 font-semibold text-cyan-300 transition hover:bg-cyan-400/10"
+              >
                 Tell Us About Your Idea ↗
               </a>
             </div>
@@ -681,11 +806,15 @@ function App() {
             <div className="rounded-3xl border border-white/[0.08] bg-[#0d111d] p-7 sm:p-9">
               <h3 className="text-xl font-bold">Our Technology Stack</h3>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Tools we use across our projects. Actual technologies depend on each project's requirements.
+                Tools we use across our projects. Actual technologies depend
+                on each project's requirements.
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
                 {technologies.map((technology) => (
-                  <span key={technology} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300 transition hover:border-cyan-400/30 hover:text-cyan-300">
+                  <span
+                    key={technology}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300 transition hover:border-cyan-400/30 hover:text-cyan-300"
+                  >
                     {technology}
                   </span>
                 ))}
@@ -693,11 +822,15 @@ function App() {
               <div className="mt-8 grid grid-cols-2 gap-4">
                 <div className="rounded-xl bg-cyan-400/[0.06] p-4">
                   <p className="font-bold text-cyan-300">Software</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-400">Web, APIs, and AI applications</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">
+                    Web, APIs, and AI applications
+                  </p>
                 </div>
                 <div className="rounded-xl bg-violet-400/[0.06] p-4">
                   <p className="font-bold text-violet-300">Hardware</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-400">Robotics, electronics, and IoT</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">
+                    Robotics, electronics, and IoT
+                  </p>
                 </div>
               </div>
             </div>
@@ -705,13 +838,20 @@ function App() {
         </section>
 
         {/* CONTACT */}
-        <section id="contact" className="border-t border-white/[0.06] bg-white/[0.015] px-5 py-24 sm:px-8">
+        <section
+          id="contact"
+          className="border-t border-white/[0.06] bg-white/[0.015] px-5 py-24 sm:px-8"
+        >
           <div className="mx-auto grid max-w-7xl gap-14 lg:grid-cols-[0.85fr_1.15fr]">
             <div>
-              <p className="mb-4 text-xs font-bold uppercase tracking-[0.3em] text-cyan-400">Start a Conversation</p>
+              <p className="mb-4 text-xs font-bold uppercase tracking-[0.3em] text-cyan-400">
+                Start a Conversation
+              </p>
               <h2 className="text-4xl font-bold leading-tight sm:text-5xl">
                 Have an idea?
-                <span className="mt-2 block text-slate-400">Let's make it real.</span>
+                <span className="mt-2 block text-slate-400">
+                  Let's make it real.
+                </span>
               </h2>
               <p className="mt-6 max-w-md leading-8 text-slate-400">
                 Tell us what you're trying to build. Share your requirements
@@ -720,78 +860,115 @@ function App() {
 
               <div className="mt-10 space-y-5">
                 <div className="flex gap-4">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cyan-400/10 text-xl">✉</span>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cyan-400/10 text-xl">
+                    ✉
+                  </span>
                   <div>
                     <p className="font-semibold">Project inquiries</p>
-                    <p className="mt-1 text-sm text-slate-400">Use the form to describe your requirements.</p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Use the form to describe your requirements.
+                    </p>
                   </div>
                 </div>
                 <div className="flex gap-4">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-xl">⚙</span>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-xl">
+                    ⚙
+                  </span>
                   <div>
                     <p className="font-semibold">Custom solutions</p>
-                    <p className="mt-1 text-sm text-slate-400">Software, AI, robotics, and embedded systems.</p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Software, AI, robotics, and embedded systems.
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="rounded-3xl border border-white/[0.08] bg-[#0d111d] p-6 sm:p-9">
-              <h3 className="text-2xl font-bold">Tell us about your project</h3>
-              <p className="mt-2 text-sm text-slate-400">Fields marked with * are required.</p>
+            <form
+              onSubmit={handleSubmit}
+              className="rounded-3xl border border-white/[0.08] bg-[#0d111d] p-6 sm:p-9"
+            >
+              <h3 className="text-2xl font-bold">
+                Tell us about your project
+              </h3>
+              <p className="mt-2 text-sm text-slate-400">
+                Fields marked with * are required.
+              </p>
 
               <div className="mt-7 grid gap-5 sm:grid-cols-2">
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-300">Your name *</span>
+                  <span className="mb-2 block text-sm font-medium text-slate-300">
+                    Your name *
+                  </span>
                   <input
                     required
                     minLength={2}
                     maxLength={100}
                     value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, name: e.target.value })
+                    }
                     placeholder="Enter your name"
+                    autoComplete="name"
                     className="w-full rounded-xl border border-white/10 bg-[#080b14] px-4 py-3.5 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400"
                   />
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-300">Email address *</span>
+                  <span className="mb-2 block text-sm font-medium text-slate-300">
+                    Email address *
+                  </span>
                   <input
                     required
                     type="email"
                     maxLength={254}
                     value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, email: e.target.value })
+                    }
                     placeholder="you@example.com"
+                    autoComplete="email"
                     className="w-full rounded-xl border border-white/10 bg-[#080b14] px-4 py-3.5 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400"
                   />
                 </label>
               </div>
 
               <label className="mt-5 block">
-                <span className="mb-2 block text-sm font-medium text-slate-300">What do you need? *</span>
+                <span className="mb-2 block text-sm font-medium text-slate-300">
+                  What do you need? *
+                </span>
                 <select
                   required
                   value={form.service}
-                  onChange={(e) => setForm({ ...form, service: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, service: e.target.value })
+                  }
                   className="w-full rounded-xl border border-white/10 bg-[#080b14] px-4 py-3.5 text-white outline-none transition focus:border-cyan-400"
                 >
-                  <option value="" disabled>Select a service</option>
+                  <option value="" disabled>
+                    Select a service
+                  </option>
                   {services.map((service) => (
-                    <option key={service.title} value={service.title}>{service.title}</option>
+                    <option key={service.title} value={service.title}>
+                      {service.title}
+                    </option>
                   ))}
                 </select>
               </label>
 
               <label className="mt-5 block">
-                <span className="mb-2 block text-sm font-medium text-slate-300">Project details *</span>
+                <span className="mb-2 block text-sm font-medium text-slate-300">
+                  Project details *
+                </span>
                 <textarea
                   required
                   minLength={5}
                   maxLength={10000}
                   rows={5}
                   value={form.project}
-                  onChange={(e) => setForm({ ...form, project: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, project: e.target.value })
+                  }
                   placeholder="Describe your idea, requirements, and goals..."
                   className="w-full resize-y rounded-xl border border-white/10 bg-[#080b14] px-4 py-3.5 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400"
                 />
@@ -800,6 +977,7 @@ function App() {
               {message && (
                 <div
                   role="status"
+                  aria-live="polite"
                   className={`mt-5 rounded-xl border p-4 text-sm leading-6 ${
                     messageType === "success"
                       ? "border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300"
@@ -817,8 +995,10 @@ function App() {
               >
                 {submitting ? "Submitting..." : "Submit Project Inquiry ↗"}
               </button>
+
               <p className="mt-4 text-center text-xs leading-5 text-slate-500">
-                Your inquiry will be sent to our backend and saved in the database.
+                Your inquiry will be sent to our backend and saved in the
+                database.
               </p>
             </form>
           </div>
@@ -833,12 +1013,16 @@ function App() {
           <p className="text-sm text-slate-500">
             Building practical technology through software, AI, and engineering.
           </p>
-          <a href="#home" className="text-sm text-slate-400 transition hover:text-cyan-400">
+          <a
+            href="#home"
+            className="text-sm text-slate-400 transition hover:text-cyan-400"
+          >
             Back to top ↑
           </a>
         </div>
         <p className="mx-auto mt-5 max-w-7xl text-center text-xs text-slate-600">
-          © {new Date().getFullYear()} TechStudio. Replace with your official team or company name.
+          © {new Date().getFullYear()} TechStudio. Replace with your official
+          team or company name.
         </p>
       </footer>
     </div>
